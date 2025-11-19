@@ -132,10 +132,22 @@
 				  "descTT": "1110",
 				  "adeProjectId": 2
 				},
+                {
+				  "adeResources": 39568,
+				  "numYearTT": -1,
+				  "descTT": "2123 (LP)",
+				  "adeProjectId": 2
+				},
 				{
 				  "adeResources": 38756,
 				  "numYearTT": -1,
 				  "descTT": "2124",
+				  "adeProjectId": 2
+				},
+                {
+				  "adeResources": 39646,
+				  "numYearTT": -1,
+				  "descTT": "2125 (TP réseau)",
 				  "adeProjectId": 2
 				},
 				{
@@ -190,18 +202,6 @@
 				  "adeResources": 24132,
 				  "numYearTT": -1,
 				  "descTT": "Labo multimédia",
-				  "adeProjectId": 2
-				},
-				{
-				  "adeResources": 39568,
-				  "numYearTT": -1,
-				  "descTT": "LP/2123",
-				  "adeProjectId": 2
-				},
-				{
-				  "adeResources": 39646,
-				  "numYearTT": -1,
-				  "descTT": "TP réseau/2125",
 				  "adeProjectId": 2
 				},
                 {
