@@ -203,7 +203,19 @@
 				  "numYearTT": -1,
 				  "descTT": "TP réseau/2125",
 				  "adeProjectId": 2
-				}
+				},
+                {
+                  "adeResources": 39294,
+                  "numYearTT": -1,
+                  "descTT": "Amphithéatre",
+                  "adeProjectId": 2
+                },
+                {
+                  "adeResources": 37865,
+                  "numYearTT": -1,
+                  "descTT": "Salle d'examen",
+                  "adeProjectId": 2
+                }
 			]
 		}
 	]
