@@ -17,8 +17,8 @@ func StartScheduler() error {
 	scheduler := gocron.NewScheduler(time.UTC)
 	_, err := scheduler.Every(domain.AppConfig.RefreshMinutes).Minutes().Do(func() {
 		timeStart := time.Now()
-		log.Println("[Info] [Cron] Refreshing timetables")
-		refreshTimetables(domain.AppConfig.Universities)
+		log.Println("[Info] [Cron] Refreshing popular timetables")
+		refreshPopularTimetables()
 		log.Println("[Info] [Cron] Refresh done in " + time.Since(timeStart).String())
 	})
 	if err != nil {
@@ -30,18 +30,47 @@ func StartScheduler() error {
 	return nil
 }
 
-func refreshTimetables(universities []domain.UniversityConfig) {
-	for _, university := range universities {
-		for _, timetable := range university.Timetables {
-			calendar, err := fetchTimetable(university, timetable)
-			if err == nil {
-				SetTimetableByIds(university.NumUniv, timetable.AdeResources, calendar.Serialize(), calendarToJson(calendar))
+func refreshPopularTimetables() {
+	for adeResourcesStr, _ := range cache {
+		adeResources, _ := strconv.Atoi(adeResourcesStr)
+		if IsPopular(adeResources) {
+			var targetUniv *domain.UniversityConfig
+			var targetTT *domain.TimetableConfig
+
+			for _, tt := range domain.AppConfig.Room.Timetables {
+				if tt.AdeResources == adeResources {
+					targetUniv = &domain.AppConfig.Room
+					targetTT = &tt
+					break
+				}
+			}
+
+			if targetUniv == nil {
+				for _, univ := range domain.AppConfig.Universities {
+					for _, tt := range univ.Timetables {
+						if tt.AdeResources == adeResources {
+							targetUniv = &univ
+							targetTT = &tt
+							break
+						}
+					}
+					if targetUniv != nil {
+						break
+					}
+				}
+			}
+
+			if targetUniv != nil && targetTT != nil {
+				calendar, err := FetchTimetable(*targetUniv, *targetTT)
+				if err == nil {
+					SetTimetableByIds(targetTT.AdeResources, calendar.Serialize(), CalendarToJson(calendar))
+				}
 			}
 		}
 	}
 }
 
-func fetchTimetable(university domain.UniversityConfig, timetable domain.TimetableConfig) (*ics.Calendar, error) {
+func FetchTimetable(university domain.UniversityConfig, timetable domain.TimetableConfig) (*ics.Calendar, error) {
 	firstDate := time.Now().AddDate(0, -4, 0).Format("2006-01-02")
 	lastDate := time.Now().AddDate(0, 4, 0).Format("2006-01-02")
 	req, err := http.NewRequest(http.MethodGet, university.AdeUniv, nil)

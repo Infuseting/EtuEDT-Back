@@ -3,13 +3,11 @@ package domain
 import "time"
 
 type UniversityResponse struct {
-	NumUniv  int    `json:"numUniv"`
 	NameUniv string `json:"nameUniv"`
 	AdeUniv  string `json:"adeUniv"`
 }
 
 type TimetableResponse struct {
-	NumUniv      int       `json:"numUniv"`
 	NameUniv     string    `json:"nameUniv"`
 	DescTT       string    `json:"descTT"`
 	NumYearTT    int       `json:"numYearTT"`

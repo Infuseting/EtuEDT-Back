@@ -19,61 +19,80 @@ func v2Router(router fiber.Router) {
 		return c.JSON(universitiesResponse)
 	})
 
-	router.Get("/:numUniv", func(c *fiber.Ctx) error {
-		university, statusCode, err := getUniversityFromParam(c)
-		if err != nil {
-			return c.Status(statusCode).JSON(domain.ErrorResponse{Error: err.Error()})
-		}
+	router.Get("/room", func(c *fiber.Ctx) error {
 		var timetablesResponse []domain.TimetableResponse
+		university := domain.AppConfig.Room
 		for _, timetable := range university.Timetables {
-			timetablesResponse = append(timetablesResponse, createTimetableResponse(university, &timetable))
+			timetablesResponse = append(timetablesResponse, createTimetableResponse(&university, &timetable))
 		}
-
 		return c.JSON(timetablesResponse)
 	})
 
-	router.Get("/:numUniv/:adeResources/:format?", func(c *fiber.Ctx) error {
-		university, statusCode, err := getUniversityFromParam(c)
-		if err != nil {
-			return c.Status(statusCode).JSON(domain.ErrorResponse{Error: err.Error()})
-		}
-		timetable, statusCode, err := getTimetableFromParam(c, university)
+	router.Get("/room/:adeResources/:format?", func(c *fiber.Ctx) error {
+		university := domain.AppConfig.Room
+		timetable, statusCode, err := getTimetableFromParam(c, &university)
 		if err != nil {
 			return c.Status(statusCode).JSON(domain.ErrorResponse{Error: err.Error()})
 		}
 
-		timetableCache, ok := cache.GetTimetableByIds(university.NumUniv, timetable.AdeResources)
-		if !ok {
-			return c.Status(fiber.StatusInternalServerError).JSON(domain.ErrorResponse{Error: "no cache found for this timetable"})
+		return serveTimetable(c, &university, timetable)
+	})
+
+	router.Get("/:adeResources/:format?", func(c *fiber.Ctx) error {
+		adeResources, err := strconv.Atoi(c.Params("adeResources"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(domain.ErrorResponse{Error: "invalid parameter"})
 		}
 
-		format := c.Params("format")
-		if len(format) == 0 {
-			return c.JSON(createTimetableResponse(university, timetable))
-		} else if format == "json" {
-			return c.JSON(timetableCache.Json)
-		} else if format == "ics" {
-			c.Set("Content-Type", "text/calendar")
-			return c.SendString(timetableCache.Ical)
-		} else {
-			return c.JSON(domain.ErrorResponse{
-				Error: "invalid format",
-			})
+		var targetUniversity *domain.UniversityConfig
+		var targetTimetable *domain.TimetableConfig
+
+		for _, university := range domain.AppConfig.Universities {
+			timetableIndex := slices.IndexFunc(university.Timetables, func(t domain.TimetableConfig) bool { return t.AdeResources == adeResources })
+			if timetableIndex >= 0 {
+				targetUniversity = &university
+				targetTimetable = &university.Timetables[timetableIndex]
+				break
+			}
 		}
+
+		if targetUniversity == nil {
+			return c.Status(fiber.StatusNotFound).JSON(domain.ErrorResponse{Error: "timetable not found"})
+		}
+
+		return serveTimetable(c, targetUniversity, targetTimetable)
 	})
 }
 
-func getUniversityFromParam(c *fiber.Ctx) (*domain.UniversityConfig, int, error) {
-	numUniv, err := strconv.Atoi(c.Params("numUniv"))
-	if err != nil {
-		return nil, fiber.StatusBadRequest, errors.New("invalid parameter")
+func serveTimetable(c *fiber.Ctx, university *domain.UniversityConfig, timetable *domain.TimetableConfig) error {
+	cache.RecordHit(timetable.AdeResources)
+
+	timetableCache, ok := cache.GetTimetableByIds(timetable.AdeResources)
+	isStale := !ok || time.Since(timetableCache.LastUpdate).Minutes() > float64(domain.AppConfig.RefreshMinutes)
+
+	if isStale {
+		calendar, err := cache.FetchTimetable(*university, *timetable)
+		if err == nil {
+			timetableCache = cache.SetTimetableByIds(timetable.AdeResources, calendar.Serialize(), cache.CalendarToJson(calendar))
+		} else if !ok {
+			return c.Status(fiber.StatusInternalServerError).JSON(domain.ErrorResponse{Error: "could not fetch timetable and no cache available"})
+		}
+		// If fetch fails but we have stale cache, we continue with stale cache
 	}
-	universityIndex := slices.IndexFunc(domain.AppConfig.Universities, func(c domain.UniversityConfig) bool { return c.NumUniv == numUniv })
-	if universityIndex < 0 {
-		return nil, fiber.StatusNotFound, errors.New("university not found")
+
+	format := c.Params("format")
+	if len(format) == 0 {
+		return c.JSON(createTimetableResponse(university, timetable))
+	} else if format == "json" {
+		return c.JSON(timetableCache.Json)
+	} else if format == "ics" {
+		c.Set("Content-Type", "text/calendar")
+		return c.SendString(timetableCache.Ical)
+	} else {
+		return c.JSON(domain.ErrorResponse{
+			Error: "invalid format",
+		})
 	}
-	university := domain.AppConfig.Universities[universityIndex]
-	return &university, 0, nil
 }
 
 func getTimetableFromParam(c *fiber.Ctx, university *domain.UniversityConfig) (*domain.TimetableConfig, int, error) {
@@ -91,21 +110,19 @@ func getTimetableFromParam(c *fiber.Ctx, university *domain.UniversityConfig) (*
 
 func createUniversityResponse(university *domain.UniversityConfig) domain.UniversityResponse {
 	return domain.UniversityResponse{
-		NumUniv:  university.NumUniv,
 		NameUniv: university.NameUniv,
 		AdeUniv:  university.AdeUniv,
 	}
 }
 
 func createTimetableResponse(university *domain.UniversityConfig, timetable *domain.TimetableConfig) domain.TimetableResponse {
-	timetableCache, ok := cache.GetTimetableByIds(university.NumUniv, timetable.AdeResources)
+	timetableCache, ok := cache.GetTimetableByIds(timetable.AdeResources)
 	lastUpdate := time.Time{}
 	if ok {
 		lastUpdate = timetableCache.LastUpdate
 	}
 
 	return domain.TimetableResponse{
-		NumUniv:      university.NumUniv,
 		NameUniv:     university.NameUniv,
 		DescTT:       timetable.DescTT,
 		NumYearTT:    timetable.NumYearTT,

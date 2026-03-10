@@ -15,7 +15,6 @@ type TimetableConfig struct {
 }
 
 type UniversityConfig struct {
-	NumUniv    int               `json:"numUniv"`
 	NameUniv   string            `json:"nameUniv"`
 	AdeUniv    string            `json:"adeUniv"`
 	Timetables []TimetableConfig `json:"timetable"`
@@ -24,6 +23,7 @@ type UniversityConfig struct {
 type Config struct {
 	RefreshMinutes int                `json:"refreshMinutes"`
 	Universities   []UniversityConfig `json:"univ"`
+	Room           UniversityConfig   `json:"room"`
 }
 
 var AppConfig Config
