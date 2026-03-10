@@ -10,6 +10,23 @@ paths:
     get:
       tags:
         - timetable
+      summary: Get the base routes
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  univ:
+                    type: string
+                  room:
+                    type: string
+  /univ:
+    get:
+      tags:
+        - timetable
       summary: Get the list of universities
       responses:
         '200':
@@ -20,6 +37,27 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/University'
+  /univ/{numUniv}:
+    get:
+      tags:
+        - timetable
+      summary: Get the list of timetables for a university
+      parameters:
+        - name: numUniv
+          in: path
+          description: Id of university
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Timetable'
   /room:
     get:
       tags:
