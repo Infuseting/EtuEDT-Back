@@ -37,13 +37,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/University'
-  /univ/{numUniv}:
+  /univ/{id}:
     get:
       tags:
         - timetable
       summary: Get the list of timetables for a university
       parameters:
-        - name: numUniv
+        - name: id
           in: path
           description: Id of university
           required: true
@@ -58,7 +58,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Timetable'
-  /room:
+  /rooms:
     get:
       tags:
         - timetable
@@ -72,7 +72,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Timetable'
-  /room/{adeResources}:
+  /rooms/{adeResources}:
     get:
       tags:
         - timetable
@@ -97,7 +97,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /room/{adeResources}/{format}:
+  /rooms/{adeResources}/{format}:
     get:
       tags:
         - timetable
@@ -205,6 +205,9 @@ components:
     University:
       type: object
       properties:
+        id:
+          type: integer
+          example: 1
         nameUniv:
           type: string
           example: Université de Caen

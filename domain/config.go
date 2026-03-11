@@ -14,16 +14,23 @@ type TimetableConfig struct {
 	AdeProjectId int    `json:"adeProjectId"`
 }
 
+type RoomConfig struct {
+	DescTT       string `json:"descTT"`
+	AdeResources int    `json:"adeResources"`
+	AdeProjectId int    `json:"adeProjectId"`
+}
+
 type UniversityConfig struct {
-	NameUniv   string            `json:"nameUniv"`
-	AdeUniv    string            `json:"adeUniv"`
-	Timetables []TimetableConfig `json:"timetable"`
+	Id         int               `json:"id"`
+	NameUniv   string            `json:"name"`
+	AdeUniv    string            `json:"adeUrl"`
+	Timetables []TimetableConfig `json:"timetables"`
 }
 
 type Config struct {
 	RefreshMinutes int                `json:"refreshMinutes"`
-	Universities   []UniversityConfig `json:"univ"`
-	Room           UniversityConfig   `json:"room"`
+	Universities   []UniversityConfig `json:"univs"`
+	Rooms          []RoomConfig       `json:"rooms"`
 }
 
 var AppConfig Config

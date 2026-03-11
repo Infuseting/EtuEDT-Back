@@ -31,46 +31,61 @@ func StartScheduler() error {
 }
 
 func refreshPopularTimetables() {
-	for adeResourcesStr, _ := range cache {
+	cacheMu.RLock()
+	keys := make([]string, 0, len(cache))
+	for k := range cache {
+		keys = append(keys, k)
+	}
+	cacheMu.RUnlock()
+
+	for _, adeResourcesStr := range keys {
 		adeResources, _ := strconv.Atoi(adeResourcesStr)
 		if IsPopular(adeResources) {
 			var targetUniv *domain.UniversityConfig
-			var targetTT *domain.TimetableConfig
+			var targetProjectId int
+			found := false
 
-			for _, tt := range domain.AppConfig.Room.Timetables {
-				if tt.AdeResources == adeResources {
-					targetUniv = &domain.AppConfig.Room
-					targetTT = &tt
+			for i := range domain.AppConfig.Universities {
+				university := &domain.AppConfig.Universities[i]
+				for j := range university.Timetables {
+					tt := &university.Timetables[j]
+					if tt.AdeResources == adeResources {
+						targetUniv = university
+						targetProjectId = tt.AdeProjectId
+						found = true
+						break
+					}
+				}
+				if found {
 					break
 				}
 			}
 
-			if targetUniv == nil {
-				for _, univ := range domain.AppConfig.Universities {
-					for _, tt := range univ.Timetables {
-						if tt.AdeResources == adeResources {
-							targetUniv = &univ
-							targetTT = &tt
-							break
+			if !found {
+				for j := range domain.AppConfig.Rooms {
+					room := &domain.AppConfig.Rooms[j]
+					if room.AdeResources == adeResources {
+						if len(domain.AppConfig.Universities) > 0 {
+							targetUniv = &domain.AppConfig.Universities[0]
 						}
-					}
-					if targetUniv != nil {
+						targetProjectId = room.AdeProjectId
+						found = true
 						break
 					}
 				}
 			}
 
-			if targetUniv != nil && targetTT != nil {
-				calendar, err := FetchTimetable(*targetUniv, *targetTT)
+			if found && targetUniv != nil {
+				calendar, err := FetchTimetable(*targetUniv, adeResources, targetProjectId)
 				if err == nil {
-					SetTimetableByIds(targetTT.AdeResources, calendar.Serialize(), CalendarToJson(calendar))
+					SetTimetableByIds(adeResources, calendar.Serialize(), CalendarToJson(calendar))
 				}
 			}
 		}
 	}
 }
 
-func FetchTimetable(university domain.UniversityConfig, timetable domain.TimetableConfig) (*ics.Calendar, error) {
+func FetchTimetable(university domain.UniversityConfig, adeResources int, adeProjectId int) (*ics.Calendar, error) {
 	firstDate := time.Now().AddDate(0, -4, 0).Format("2006-01-02")
 	lastDate := time.Now().AddDate(0, 4, 0).Format("2006-01-02")
 	req, err := http.NewRequest(http.MethodGet, university.AdeUniv, nil)
@@ -78,14 +93,14 @@ func FetchTimetable(university domain.UniversityConfig, timetable domain.Timetab
 		return nil, err
 	}
 	q := req.URL.Query()
-	q.Add("resources", strconv.Itoa(timetable.AdeResources))
-	q.Add("projectId", strconv.Itoa(timetable.AdeProjectId))
+	q.Add("resources", strconv.Itoa(adeResources))
+	q.Add("projectId", strconv.Itoa(adeProjectId))
 	q.Add("calType", "ical")
 	q.Add("firstDate", firstDate)
 	q.Add("lastDate", lastDate)
 	req.URL.RawQuery = q.Encode()
 
-	body, err := MakeRequest(fmt.Sprintf("%d", timetable.AdeResources), req)
+	body, err := MakeRequest(fmt.Sprintf("%d", adeResources), req)
 	if err != nil {
 		return nil, err
 	}
