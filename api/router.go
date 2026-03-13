@@ -204,8 +204,6 @@ func getRoomEvents(c *fiber.Ctx) error {
 // Defaults to JSON. Use Accept: text/calendar for iCal format.
 // If cache is stale or missing, fetches on-demand.
 func serveEvents(c *fiber.Ctx, univ *domain.UniversityConfig, adeResources int) error {
-	cache.RecordHit(adeResources)
-
 	timetableCache, ok := cache.GetTimetableByAdeResources(adeResources)
 	isStale := !ok || time.Since(timetableCache.LastUpdate).Minutes() > float64(domain.AppConfig.RefreshMinutes)
 

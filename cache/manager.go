@@ -2,17 +2,21 @@ package cache
 
 import (
 	"EtuEDT-Go/domain"
+	"fmt"
+	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	ics "github.com/arran4/golang-ical"
 )
 
 type TimetableCache struct {
-	AdeResources      int                `json:"adeResources"`
-	LastUpdate        time.Time          `json:"lastUpdate"`
-	Ical              string             `json:"calendar"`
-	Json              []domain.JsonEvent `json:"json"`
-	RequestTimestamps []time.Time        `json:"requestTimestamps"`
+	AdeResources int                `json:"adeResources"`
+	LastUpdate   time.Time          `json:"lastUpdate"`
+	Ical         string             `json:"calendar"`
+	Json         []domain.JsonEvent `json:"json"`
 }
 
 var cacheMap = make(map[string]TimetableCache)
@@ -29,70 +33,39 @@ func GetTimetableByAdeResources(adeResources int) (TimetableCache, bool) {
 func SetTimetableByAdeResources(adeResources int, ical string, json []domain.JsonEvent) TimetableCache {
 	key := getKey(adeResources)
 	cacheMu.Lock()
-	timetable, ok := cacheMap[key]
-	if ok {
-		timetable.LastUpdate = time.Now()
-		timetable.Ical = ical
-		timetable.Json = json
-	} else {
-		timetable = TimetableCache{
-			AdeResources:      adeResources,
-			LastUpdate:        time.Now(),
-			Ical:              ical,
-			Json:              json,
-			RequestTimestamps: []time.Time{},
-		}
+	timetable := TimetableCache{
+		AdeResources: adeResources,
+		LastUpdate:   time.Now(),
+		Ical:         ical,
+		Json:         json,
 	}
 	cacheMap[key] = timetable
 	cacheMu.Unlock()
 	return timetable
 }
 
-func RecordHit(adeResources int) {
-	key := getKey(adeResources)
-	cacheMu.Lock()
-	timetable, ok := cacheMap[key]
-	if !ok {
-		timetable = TimetableCache{
-			AdeResources:      adeResources,
-			RequestTimestamps: []time.Time{},
-		}
-	}
-
-	timetable.RequestTimestamps = append(timetable.RequestTimestamps, time.Now())
-	// Cleanup old timestamps (older than 7 days)
-	var recentTimestamps []time.Time
-	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
-	for _, t := range timetable.RequestTimestamps {
-		if t.After(sevenDaysAgo) {
-			recentTimestamps = append(recentTimestamps, t)
-		}
-	}
-	timetable.RequestTimestamps = recentTimestamps
-	cacheMap[key] = timetable
-	cacheMu.Unlock()
-}
-
-func IsPopular(adeResources int) bool {
-	key := getKey(adeResources)
-	cacheMu.RLock()
-	timetable, ok := cacheMap[key]
-	cacheMu.RUnlock()
-	if !ok {
-		return false
-	}
-
-	count := 0
-	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
-	for _, t := range timetable.RequestTimestamps {
-		if t.After(sevenDaysAgo) {
-			count++
-		}
-	}
-
-	return count > 5
-}
-
 func getKey(adeResources int) string {
 	return strconv.Itoa(adeResources)
+}
+
+func FetchTimetable(adeBaseUrl string, adeResources int, adeProjectId int) (*ics.Calendar, error) {
+	firstDate, lastDate := domain.GetAcademicYearDates(time.Now())
+	fullUrl := domain.BuildAdeUrl(adeBaseUrl, adeResources, adeProjectId, firstDate, lastDate)
+
+	req, err := http.NewRequest(http.MethodGet, fullUrl, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := MakeRequest(fmt.Sprintf("%d", adeResources), req)
+	if err != nil {
+		return nil, err
+	}
+
+	ical, err := ics.ParseCalendar(strings.NewReader(string(body)))
+	if err != nil {
+		return nil, err
+	}
+
+	return ical, nil
 }

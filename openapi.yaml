@@ -1,7 +1,7 @@
 openapi: 3.0.1
 info:
   description: API of EtuEDT-Back server.
-  version: 2.2.0
+  version: 3.0.0
   title: EtuEDT-Back
 servers:
   - url: https://edtapi.antoninhuaut.fr/v2

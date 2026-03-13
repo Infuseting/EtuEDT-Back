@@ -16,8 +16,12 @@ const (
 )
 
 var httpClient = &http.Client{Timeout: httpTimeout}
+var sem = make(chan struct{}, 5)
 
 func MakeRequest(logPrefix string, req *http.Request) ([]byte, error) {
+	sem <- struct{}{}
+	defer func() { <-sem }()
+
 	attempts := 0
 	body, err := retry.DoWithData(func() ([]byte, error) {
 		attempts++
