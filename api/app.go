@@ -43,6 +43,7 @@ func StartWebApp() {
 			"path": "v3",
 		})
 	})
+	v2Router(app.Group("/v2"))
 	v3Router(app.Group("/v3"))
 
 	if err := app.Listen(":3000"); err != nil {
