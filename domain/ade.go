@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"strconv"
 	"time"
@@ -27,6 +28,7 @@ func GetAcademicYearDates(now time.Time) (firstDate string, lastDate string) {
 func BuildAdeUrl(baseUrl string, adeResources int, adeProjectId int, firstDate string, lastDate string) string {
 	u, err := url.Parse(baseUrl)
 	if err != nil {
+		log.Printf("BuildAdeUrl: failed to parse base URL %q: %v", baseUrl, err)
 		return baseUrl
 	}
 	q := u.Query()
