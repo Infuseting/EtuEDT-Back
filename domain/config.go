@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 )
 
@@ -35,8 +34,7 @@ type UniversityConfig struct {
 }
 
 type Config struct {
-	RefreshMinutes int                `json:"refreshMinutes"`
-	Universities   []UniversityConfig `json:"univs"`
+	Universities []UniversityConfig `json:"univs"`
 }
 
 var AppConfig Config
@@ -47,15 +45,13 @@ func LoadConfig() error {
 		return err
 	}
 
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(file)
-
 	decoder := json.NewDecoder(file)
 	if err := decoder.Decode(&AppConfig); err != nil {
+		_ = file.Close()
+		return err
+	}
+
+	if err := file.Close(); err != nil {
 		return err
 	}
 
@@ -63,21 +59,41 @@ func LoadConfig() error {
 }
 
 func validateConfig(config *Config) error {
-	if config.RefreshMinutes < 1 {
-		return errors.New("refreshMinutes must be greater than 0")
+	if len(config.Universities) == 0 {
+		return errors.New("at least one university must be configured")
 	}
 
 	univIDs := make(map[int]bool)
-	groupIDs := make(map[int]bool)
 	adeResourcesSet := make(map[int]bool)
 
 	for _, univ := range config.Universities {
+		if univ.ID <= 0 {
+			return fmt.Errorf("invalid university id: %d", univ.ID)
+		}
+		if univ.Name == "" {
+			return fmt.Errorf("university %d name cannot be empty", univ.ID)
+		}
+		if univ.AdeUrl == "" {
+			return fmt.Errorf("university %d adeUrl cannot be empty", univ.ID)
+		}
+		if univ.AdeProjectId <= 0 {
+			return fmt.Errorf("university %d adeProjectId must be greater than 0", univ.ID)
+		}
+
 		if univIDs[univ.ID] {
 			return fmt.Errorf("duplicate university id: %d", univ.ID)
 		}
 		univIDs[univ.ID] = true
 
+		groupIDs := make(map[int]bool)
+
 		for _, room := range univ.Rooms {
+			if room.AdeResources <= 0 {
+				return fmt.Errorf("invalid room adeResources in university %d", univ.ID)
+			}
+			if room.Label == "" {
+				return fmt.Errorf("empty room label in university %d for adeResources %d", univ.ID, room.AdeResources)
+			}
 			if adeResourcesSet[room.AdeResources] {
 				return fmt.Errorf("duplicate adeResources: %d", room.AdeResources)
 			}
@@ -85,12 +101,30 @@ func validateConfig(config *Config) error {
 		}
 
 		for _, group := range univ.Groups {
+			if group.ID <= 0 {
+				return fmt.Errorf("invalid group id in university %d", univ.ID)
+			}
+			if group.Name == "" {
+				return fmt.Errorf("empty group name in university %d", univ.ID)
+			}
 			if groupIDs[group.ID] {
 				return fmt.Errorf("duplicate group id: %d in university %d", group.ID, univ.ID)
 			}
 			groupIDs[group.ID] = true
+			if len(group.Timetables) == 0 {
+				return fmt.Errorf("group %d in university %d has no timetables", group.ID, univ.ID)
+			}
 
 			for _, tt := range group.Timetables {
+				if tt.AdeResources <= 0 {
+					return fmt.Errorf("invalid timetable adeResources in group %d of university %d", group.ID, univ.ID)
+				}
+				if tt.Year <= 0 {
+					return fmt.Errorf("invalid timetable year in group %d of university %d", group.ID, univ.ID)
+				}
+				if tt.Label == "" {
+					return fmt.Errorf("empty timetable label in group %d of university %d", group.ID, univ.ID)
+				}
 				if adeResourcesSet[tt.AdeResources] {
 					return fmt.Errorf("duplicate adeResources: %d", tt.AdeResources)
 				}

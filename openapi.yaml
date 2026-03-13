@@ -4,7 +4,7 @@ info:
   version: 3.0.0
   title: EtuEDT-Back
 servers:
-  - url: https://edtapi.antoninhuaut.fr/v2
+  - url: https://edtapi.antoninhuaut.fr/v3
 paths:
   /:
     get:
@@ -21,7 +21,7 @@ paths:
                 properties:
                   path:
                     type: string
-                    example: v2
+                    example: v3
   /univ:
     get:
       tags:
@@ -285,6 +285,9 @@ components:
         name:
           type: string
           example: Université de Caen
+        adeUrl:
+          type: string
+          example: https://ade.unicaen.fr/jsp/custom/modules/plannings/anonymous_cal.jsp
     Group:
       type: object
       properties:

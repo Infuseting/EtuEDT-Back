@@ -1,9 +1,8 @@
 {
-    "refreshMinutes": 480,
     "univs": [
         {
             "id": 1,
-            "name": "Université de Caen - IUT Grand Ouest Normandie",
+            "name": "Université de Caen",
             "adeUrl": "https://ade.unicaen.fr/jsp/custom/modules/plannings/anonymous_cal.jsp",
             "adeProjectId": 2,
             "rooms": [

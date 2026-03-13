@@ -3,8 +3,9 @@ package domain
 import "time"
 
 type UniversityResponse struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID     int    `json:"id"`
+	Name   string `json:"name"`
+	AdeUrl string `json:"adeUrl"`
 }
 
 type GroupResponse struct {

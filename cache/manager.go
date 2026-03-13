@@ -22,16 +22,16 @@ type TimetableCache struct {
 var cacheMap = make(map[string]TimetableCache)
 var cacheMu sync.RWMutex
 
-func GetTimetableByAdeResources(adeResources int) (TimetableCache, bool) {
-	key := getKey(adeResources)
+func GetTimetableByAdeResources(univID int, adeResources int) (TimetableCache, bool) {
+	key := getKey(univID, adeResources)
 	cacheMu.RLock()
 	timetable, ok := cacheMap[key]
 	cacheMu.RUnlock()
 	return timetable, ok
 }
 
-func SetTimetableByAdeResources(adeResources int, ical string, json []domain.JsonEvent) TimetableCache {
-	key := getKey(adeResources)
+func SetTimetableByAdeResources(univID int, adeResources int, ical string, json []domain.JsonEvent) TimetableCache {
+	key := getKey(univID, adeResources)
 	cacheMu.Lock()
 	timetable := TimetableCache{
 		AdeResources: adeResources,
@@ -44,8 +44,8 @@ func SetTimetableByAdeResources(adeResources int, ical string, json []domain.Jso
 	return timetable
 }
 
-func getKey(adeResources int) string {
-	return strconv.Itoa(adeResources)
+func getKey(univID int, adeResources int) string {
+	return strconv.Itoa(univID) + "-" + strconv.Itoa(adeResources)
 }
 
 func FetchTimetable(adeBaseUrl string, adeResources int, adeProjectId int) (*ics.Calendar, error) {
