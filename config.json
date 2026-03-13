@@ -3,7 +3,7 @@
     "univs": [
         {
             "id": 1,
-            "name": "BUT Informatique - IUT Grand Ouest Normandie",
+            "name": "Université de Caen - IUT Grand Ouest Normandie",
             "adeUrl": "https://ade.unicaen.fr/jsp/custom/modules/plannings/anonymous_cal.jsp",
             "adeProjectId": 2,
             "rooms": [
@@ -3035,7 +3035,7 @@
             "groups": [
                 {
                     "id": 1,
-                    "name": "BUT Informatique - 1ère année",
+                    "name": "BUT Informatique",
                     "timetables": [
                         {
                             "adeResources": 1177,
@@ -3066,13 +3066,7 @@
                             "adeResources": 1191,
                             "year": 1,
                             "label": "TP 3.2"
-                        }
-                    ]
-                },
-                {
-                    "id": 2,
-                    "name": "BUT Informatique - 2ème année",
-                    "timetables": [
+                        },
                         {
                             "adeResources": 1200,
                             "year": 2,
@@ -3102,13 +3096,7 @@
                             "adeResources": 1209,
                             "year": 2,
                             "label": "TP 3.2"
-                        }
-                    ]
-                },
-                {
-                    "id": 3,
-                    "name": "BUT Informatique - 3ème année",
-                    "timetables": [
+                        },
                         {
                             "adeResources": 36647,
                             "year": 3,
