@@ -3,17 +3,29 @@ package domain
 import "time"
 
 type UniversityResponse struct {
-	Id       int    `json:"id"`
-	NameUniv string `json:"nameUniv"`
-	AdeUniv  string `json:"adeUniv"`
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type GroupResponse struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 type TimetableResponse struct {
-	NameUniv     string    `json:"nameUniv"`
-	DescTT       string    `json:"descTT"`
-	NumYearTT    int       `json:"numYearTT"`
 	AdeResources int       `json:"adeResources"`
 	AdeProjectId int       `json:"adeProjectId"`
+	Year         int       `json:"year"`
+	Label        string    `json:"label"`
+	AdeUrl       string    `json:"adeUrl"`
+	LastUpdate   time.Time `json:"lastUpdate"`
+}
+
+type RoomResponse struct {
+	AdeResources int       `json:"adeResources"`
+	AdeProjectId int       `json:"adeProjectId"`
+	Label        string    `json:"label"`
+	AdeUrl       string    `json:"adeUrl"`
 	LastUpdate   time.Time `json:"lastUpdate"`
 }
 

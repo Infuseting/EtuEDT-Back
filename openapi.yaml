@@ -1,7 +1,7 @@
 openapi: 3.0.1
 info:
   description: API of EtuEDT-Back server.
-  version: 2.1.0
+  version: 2.2.0
   title: EtuEDT-Back
 servers:
   - url: https://edtapi.antoninhuaut.fr/v2
@@ -9,7 +9,7 @@ paths:
   /:
     get:
       tags:
-        - timetable
+        - general
       summary: Get the base routes
       responses:
         '200':
@@ -19,14 +19,13 @@ paths:
               schema:
                 type: object
                 properties:
-                  univ:
+                  path:
                     type: string
-                  room:
-                    type: string
+                    example: v2
   /univ:
     get:
       tags:
-        - timetable
+        - university
       summary: Get the list of universities
       responses:
         '200':
@@ -37,13 +36,38 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/University'
-  /univ/{id}:
+  /univ/{univId}:
     get:
       tags:
-        - timetable
-      summary: Get the list of timetables for a university
+        - university
+      summary: Get university detail
       parameters:
-        - name: id
+        - name: univId
+          in: path
+          description: Id of university
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/University'
+        '404':
+          description: University not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /univ/{univId}/groups:
+    get:
+      tags:
+        - group
+      summary: Get the list of groups for a university
+      parameters:
+        - name: univId
           in: path
           description: Id of university
           required: true
@@ -57,12 +81,27 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Timetable'
-  /rooms:
+                  $ref: '#/components/schemas/Group'
+        '404':
+          description: University not found
+  /univ/{univId}/groups/{groupId}:
     get:
       tags:
-        - timetable
-      summary: Get a list of the room's timetables
+        - group
+      summary: Get the list of timetables in a group
+      parameters:
+        - name: univId
+          in: path
+          description: Id of university
+          required: true
+          schema:
+            type: integer
+        - name: groupId
+          in: path
+          description: Id of group
+          required: true
+          schema:
+            type: integer
       responses:
         '200':
           description: Successful operation
@@ -72,15 +111,29 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Timetable'
-  /rooms/{adeResources}:
+        '404':
+          description: University or group not found
+  /univ/{univId}/groups/{groupId}/{adeResources}:
     get:
       tags:
         - timetable
-      summary: Get room timetable details by adeResources
+      summary: Get timetable metadata
       parameters:
+        - name: univId
+          in: path
+          description: Id of university
+          required: true
+          schema:
+            type: integer
+        - name: groupId
+          in: path
+          description: Id of group
+          required: true
+          schema:
+            type: integer
         - name: adeResources
           in: path
-          description: Id of timetable
+          description: ADE resources ID
           required: true
           schema:
             type: integer
@@ -92,32 +145,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/Timetable'
         '404':
-          description: Invalid parameters
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /rooms/{adeResources}/{format}:
+          description: Timetable not found
+  /univ/{univId}/groups/{groupId}/{adeResources}/events:
     get:
       tags:
         - timetable
-      summary: Get room timetable content by adeResources and format
+      summary: Get timetable events
       parameters:
-        - name: adeResources
+        - name: univId
           in: path
-          description: Id of timetable
+          description: Id of university
           required: true
           schema:
             type: integer
-        - name: format
+        - name: groupId
           in: path
-          description: Format to return
+          description: Id of group
           required: true
           schema:
-            type: string
-            enum:
-              - ics
-              - json
+            type: integer
+        - name: adeResources
+          in: path
+          description: ADE resources ID
+          required: true
+          schema:
+            type: integer
       responses:
         '200':
           description: Successful operation
@@ -130,21 +182,21 @@ paths:
             text/calendar:
               schema:
                 $ref: '#/components/schemas/IcalEvent'
-        '404':
-          description: Invalid parameters
+        '503':
+          description: No cache found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /{adeResources}:
+  /univ/{univId}/rooms:
     get:
       tags:
-        - timetable
-      summary: Get timetable details by adeResources
+        - room
+      summary: Get the list of rooms for a university
       parameters:
-        - name: adeResources
+        - name: univId
           in: path
-          description: Id of timetable
+          description: Id of university
           required: true
           schema:
             type: integer
@@ -154,34 +206,56 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Timetable'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Room'
         '404':
-          description: Invalid parameters
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /{adeResources}/{format}:
+          description: University not found
+  /univ/{univId}/rooms/{adeResources}:
     get:
       tags:
-        - timetable
-      summary: Get timetable content by adeResources and format
+        - room
+      summary: Get room metadata
       parameters:
-        - name: adeResources
+        - name: univId
           in: path
-          description: Id of timetable
+          description: Id of university
           required: true
           schema:
             type: integer
-        - name: format
+        - name: adeResources
           in: path
-          description: Format to return
+          description: ADE resources ID
           required: true
           schema:
-            type: string
-            enum:
-              - ics
-              - json
+            type: integer
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+        '404':
+          description: Room not found
+  /univ/{univId}/rooms/{adeResources}/events:
+    get:
+      tags:
+        - room
+      summary: Get room events
+      parameters:
+        - name: univId
+          in: path
+          description: Id of university
+          required: true
+          schema:
+            type: integer
+        - name: adeResources
+          in: path
+          description: ADE resources ID
+          required: true
+          schema:
+            type: integer
       responses:
         '200':
           description: Successful operation
@@ -194,8 +268,8 @@ paths:
             text/calendar:
               schema:
                 $ref: '#/components/schemas/IcalEvent'
-        '404':
-          description: Invalid parameters
+        '503':
+          description: No cache found
           content:
             application/json:
               schema:
@@ -208,30 +282,54 @@ components:
         id:
           type: integer
           example: 1
-        nameUniv:
+        name:
           type: string
           example: Université de Caen
-        adeUniv:
+    Group:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
           type: string
-          example: http://ade.unicaen.fr
+          example: BUT Informatique - 1ère année
     Timetable:
       type: object
       properties:
-        nameUniv:
-          type: string
-          example: Université de Caen
-        numYearTT:
-          type: integer
-          example: 1
-        descTT:
-          type: string
-          example: TP 1.1
         adeResources:
           type: integer
           example: 1177
         adeProjectId:
           type: integer
-          example: 4
+          example: 2
+        year:
+          type: integer
+          example: 1
+        label:
+          type: string
+          example: TP 1.1
+        adeUrl:
+          type: string
+          example: https://ade.unicaen.fr/...
+        lastUpdate:
+          type: string
+          example: '2020-06-16T07:14:34.017Z'
+    Room:
+      type: object
+      properties:
+        adeResources:
+          type: integer
+          example: 42349
+        adeProjectId:
+          type: integer
+          example: 2
+        label:
+          type: string
+          example: AC 007 (A)
+        adeUrl:
+          type: string
+          example: https://ade.unicaen.fr/...
         lastUpdate:
           type: string
           example: '2020-06-16T07:14:34.017Z'
@@ -240,7 +338,7 @@ components:
       properties:
         error:
           type: string
-          example: no cache found for this timetable
+          example: no cache found for this resource, try again later
     JsonEvent:
       type: object
       properties:

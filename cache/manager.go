@@ -15,21 +15,21 @@ type TimetableCache struct {
 	RequestTimestamps []time.Time        `json:"requestTimestamps"`
 }
 
-var cache = make(map[string]TimetableCache)
+var cacheMap = make(map[string]TimetableCache)
 var cacheMu sync.RWMutex
 
-func GetTimetableByIds(adeResources int) (TimetableCache, bool) {
+func GetTimetableByAdeResources(adeResources int) (TimetableCache, bool) {
 	key := getKey(adeResources)
 	cacheMu.RLock()
-	timetable, ok := cache[key]
+	timetable, ok := cacheMap[key]
 	cacheMu.RUnlock()
 	return timetable, ok
 }
 
-func SetTimetableByIds(adeResources int, ical string, json []domain.JsonEvent) TimetableCache {
+func SetTimetableByAdeResources(adeResources int, ical string, json []domain.JsonEvent) TimetableCache {
 	key := getKey(adeResources)
 	cacheMu.Lock()
-	timetable, ok := cache[key]
+	timetable, ok := cacheMap[key]
 	if ok {
 		timetable.LastUpdate = time.Now()
 		timetable.Ical = ical
@@ -43,7 +43,7 @@ func SetTimetableByIds(adeResources int, ical string, json []domain.JsonEvent) T
 			RequestTimestamps: []time.Time{},
 		}
 	}
-	cache[key] = timetable
+	cacheMap[key] = timetable
 	cacheMu.Unlock()
 	return timetable
 }
@@ -51,7 +51,7 @@ func SetTimetableByIds(adeResources int, ical string, json []domain.JsonEvent) T
 func RecordHit(adeResources int) {
 	key := getKey(adeResources)
 	cacheMu.Lock()
-	timetable, ok := cache[key]
+	timetable, ok := cacheMap[key]
 	if !ok {
 		timetable = TimetableCache{
 			AdeResources:      adeResources,
@@ -69,14 +69,14 @@ func RecordHit(adeResources int) {
 		}
 	}
 	timetable.RequestTimestamps = recentTimestamps
-	cache[key] = timetable
+	cacheMap[key] = timetable
 	cacheMu.Unlock()
 }
 
 func IsPopular(adeResources int) bool {
 	key := getKey(adeResources)
 	cacheMu.RLock()
-	timetable, ok := cache[key]
+	timetable, ok := cacheMap[key]
 	cacheMu.RUnlock()
 	if !ok {
 		return false

@@ -11,215 +11,280 @@ import (
 )
 
 func v2Router(router fiber.Router) {
-	router.Get("/", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"univ":  "/v2/univ",
-			"rooms": "/v2/rooms",
-		})
-	})
+	univ := router.Group("/univ")
 
-	router.Get("/univ", func(c *fiber.Ctx) error {
-		var universitiesResponse []domain.UniversityResponse
-		for i := range domain.AppConfig.Universities {
-			university := &domain.AppConfig.Universities[i]
-			universitiesResponse = append(universitiesResponse, createUniversityResponse(university))
-		}
-		return c.JSON(universitiesResponse)
-	})
+	// GET /v2/univ — list universities
+	univ.Get("/", listUniversities)
 
-	router.Get("/univ/:id", func(c *fiber.Ctx) error {
-		id, err := strconv.Atoi(c.Params("id"))
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(domain.ErrorResponse{Error: "invalid parameter"})
-		}
+	// GET /v2/univ/:univId — university detail
+	univ.Get("/:univId", getUniversity)
 
-		var targetUniversity *domain.UniversityConfig
-		for i := range domain.AppConfig.Universities {
-			if domain.AppConfig.Universities[i].Id == id {
-				targetUniversity = &domain.AppConfig.Universities[i]
-				break
-			}
-		}
+	// GET /v2/univ/:univId/groups — list groups
+	univ.Get("/:univId/groups", listGroups)
 
-		if targetUniversity == nil {
-			return c.Status(fiber.StatusNotFound).JSON(domain.ErrorResponse{Error: "university not found"})
-		}
+	// GET /v2/univ/:univId/groups/:groupId — list timetables in group
+	univ.Get("/:univId/groups/:groupId", listTimetables)
 
-		var timetablesResponse []domain.TimetableResponse
-		for i := range targetUniversity.Timetables {
-			timetable := &targetUniversity.Timetables[i]
-			timetablesResponse = append(timetablesResponse, createTimetableResponse(targetUniversity, timetable))
-		}
-		return c.JSON(timetablesResponse)
-	})
+	// GET /v2/univ/:univId/groups/:groupId/:adeResources — timetable metadata
+	univ.Get("/:univId/groups/:groupId/:adeResources", getTimetableMetadata)
 
-	router.Get("/rooms", func(c *fiber.Ctx) error {
-		var timetablesResponse []domain.TimetableResponse
-		var defaultUniv *domain.UniversityConfig
-		if len(domain.AppConfig.Universities) > 0 {
-			defaultUniv = &domain.AppConfig.Universities[0]
-		}
-		for j := range domain.AppConfig.Rooms {
-			room := &domain.AppConfig.Rooms[j]
-			timetablesResponse = append(timetablesResponse, createRoomResponse(defaultUniv, room))
-		}
-		return c.JSON(timetablesResponse)
-	})
+	// GET /v2/univ/:univId/groups/:groupId/:adeResources/events — timetable events
+	univ.Get("/:univId/groups/:groupId/:adeResources/events", getTimetableEvents)
 
-	router.Get("/rooms/:adeResources/:format?", func(c *fiber.Ctx) error {
-		adeResources, err := strconv.Atoi(c.Params("adeResources"))
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(domain.ErrorResponse{Error: "invalid parameter"})
-		}
+	// GET /v2/univ/:univId/rooms — list rooms
+	univ.Get("/:univId/rooms", listRooms)
 
-		var targetUniversity *domain.UniversityConfig
-		if len(domain.AppConfig.Universities) > 0 {
-			targetUniversity = &domain.AppConfig.Universities[0]
-		}
-		var targetRoom *domain.RoomConfig
+	// GET /v2/univ/:univId/rooms/:adeResources — room metadata
+	univ.Get("/:univId/rooms/:adeResources", getRoomMetadata)
 
-		roomIndex := slices.IndexFunc(domain.AppConfig.Rooms, func(r domain.RoomConfig) bool { return r.AdeResources == adeResources })
-		if roomIndex >= 0 {
-			targetRoom = &domain.AppConfig.Rooms[roomIndex]
-		}
-
-		if targetRoom == nil {
-			return c.Status(fiber.StatusNotFound).JSON(domain.ErrorResponse{Error: "room not found"})
-		}
-
-		return serveRoomConfig(c, targetUniversity, targetRoom)
-	})
-
-	router.Get("/:adeResources/:format?", func(c *fiber.Ctx) error {
-		adeResources, err := strconv.Atoi(c.Params("adeResources"))
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(domain.ErrorResponse{Error: "invalid parameter"})
-		}
-
-		var targetUniversity *domain.UniversityConfig
-		var targetTimetable *domain.TimetableConfig
-
-		for i := range domain.AppConfig.Universities {
-			timetableIndex := slices.IndexFunc(domain.AppConfig.Universities[i].Timetables, func(t domain.TimetableConfig) bool { return t.AdeResources == adeResources })
-			if timetableIndex >= 0 {
-				targetUniversity = &domain.AppConfig.Universities[i]
-				targetTimetable = &domain.AppConfig.Universities[i].Timetables[timetableIndex]
-				break
-			}
-		}
-
-		if targetUniversity == nil {
-			return c.Status(fiber.StatusNotFound).JSON(domain.ErrorResponse{Error: "timetable not found"})
-		}
-
-		return serveTimetable(c, targetUniversity, targetTimetable)
-	})
+	// GET /v2/univ/:univId/rooms/:adeResources/events — room events
+	univ.Get("/:univId/rooms/:adeResources/events", getRoomEvents)
 }
 
-func serveRoomConfig(c *fiber.Ctx, university *domain.UniversityConfig, room *domain.RoomConfig) error {
-	cache.RecordHit(room.AdeResources)
+// --- Handlers ---
 
-	timetableCache, ok := cache.GetTimetableByIds(room.AdeResources)
-	isStale := !ok || time.Since(timetableCache.LastUpdate).Minutes() > float64(domain.AppConfig.RefreshMinutes)
-
-	if isStale {
-		calendar, err := cache.FetchTimetable(*university, room.AdeResources, room.AdeProjectId)
-		if err == nil {
-			timetableCache = cache.SetTimetableByIds(room.AdeResources, calendar.Serialize(), cache.CalendarToJson(calendar))
-		} else if !ok {
-			return c.Status(fiber.StatusInternalServerError).JSON(domain.ErrorResponse{Error: "could not fetch timetable and no cache available"})
-		}
-	}
-
-	format := c.Params("format")
-	if len(format) == 0 {
-		return c.JSON(createRoomResponse(university, room))
-	} else if format == "json" {
-		return c.JSON(timetableCache.Json)
-	} else if format == "ics" {
-		c.Set("Content-Type", "text/calendar")
-		return c.SendString(timetableCache.Ical)
-	} else {
-		return c.Status(fiber.StatusBadRequest).JSON(domain.ErrorResponse{
-			Error: "invalid format",
+func listUniversities(c *fiber.Ctx) error {
+	var resp []domain.UniversityResponse
+	for _, u := range domain.AppConfig.Universities {
+		resp = append(resp, domain.UniversityResponse{
+			ID:   u.ID,
+			Name: u.Name,
 		})
 	}
+	return c.JSON(resp)
 }
 
-func serveTimetable(c *fiber.Ctx, university *domain.UniversityConfig, timetable *domain.TimetableConfig) error {
-	cache.RecordHit(timetable.AdeResources)
-
-	timetableCache, ok := cache.GetTimetableByIds(timetable.AdeResources)
-	isStale := !ok || time.Since(timetableCache.LastUpdate).Minutes() > float64(domain.AppConfig.RefreshMinutes)
-
-	if isStale {
-		calendar, err := cache.FetchTimetable(*university, timetable.AdeResources, timetable.AdeProjectId)
-		if err == nil {
-			timetableCache = cache.SetTimetableByIds(timetable.AdeResources, calendar.Serialize(), cache.CalendarToJson(calendar))
-		} else if !ok {
-			return c.Status(fiber.StatusInternalServerError).JSON(domain.ErrorResponse{Error: "could not fetch timetable and no cache available"})
-		}
-		// If fetch fails but we have stale cache, we continue with stale cache
+func getUniversity(c *fiber.Ctx) error {
+	univ, err := findUniversity(c)
+	if err != nil {
+		return err
 	}
+	return c.JSON(domain.UniversityResponse{
+		ID:   univ.ID,
+		Name: univ.Name,
+	})
+}
 
-	format := c.Params("format")
-	if len(format) == 0 {
-		return c.JSON(createTimetableResponse(university, timetable))
-	} else if format == "json" {
-		return c.JSON(timetableCache.Json)
-	} else if format == "ics" {
-		c.Set("Content-Type", "text/calendar")
-		return c.SendString(timetableCache.Ical)
-	} else {
-		return c.Status(fiber.StatusBadRequest).JSON(domain.ErrorResponse{
-			Error: "invalid format",
+func listGroups(c *fiber.Ctx) error {
+	univ, err := findUniversity(c)
+	if err != nil {
+		return err
+	}
+	var resp []domain.GroupResponse
+	for _, g := range univ.Groups {
+		resp = append(resp, domain.GroupResponse{
+			ID:   g.ID,
+			Name: g.Name,
 		})
 	}
+	return c.JSON(resp)
 }
 
-func createUniversityResponse(university *domain.UniversityConfig) domain.UniversityResponse {
-	return domain.UniversityResponse{
-		Id:       university.Id,
-		NameUniv: university.NameUniv,
-		AdeUniv:  university.AdeUniv,
+func listTimetables(c *fiber.Ctx) error {
+	univ, err := findUniversity(c)
+	if err != nil {
+		return err
 	}
+	group, err := findGroup(c, univ)
+	if err != nil {
+		return err
+	}
+	firstDate, lastDate := domain.GetAcademicYearDates(time.Now())
+	var resp []domain.TimetableResponse
+	for _, tt := range group.Timetables {
+		cached, _ := cache.GetTimetableByAdeResources(tt.AdeResources)
+		resp = append(resp, domain.TimetableResponse{
+			AdeResources: tt.AdeResources,
+			AdeProjectId: univ.AdeProjectId,
+			Year:         tt.Year,
+			Label:        tt.Label,
+			AdeUrl:       domain.BuildAdeUrl(univ.AdeUrl, tt.AdeResources, univ.AdeProjectId, firstDate, lastDate),
+			LastUpdate:   cached.LastUpdate,
+		})
+	}
+	return c.JSON(resp)
 }
 
-func createTimetableResponse(university *domain.UniversityConfig, timetable *domain.TimetableConfig) domain.TimetableResponse {
-	timetableCache, ok := cache.GetTimetableByIds(timetable.AdeResources)
-	lastUpdate := time.Time{}
-	if ok {
-		lastUpdate = timetableCache.LastUpdate
+func getTimetableMetadata(c *fiber.Ctx) error {
+	univ, err := findUniversity(c)
+	if err != nil {
+		return err
 	}
-
-	return domain.TimetableResponse{
-		NameUniv:     university.NameUniv,
-		DescTT:       timetable.DescTT,
-		NumYearTT:    timetable.NumYearTT,
-		AdeResources: timetable.AdeResources,
-		AdeProjectId: timetable.AdeProjectId,
-		LastUpdate:   lastUpdate,
+	group, err := findGroup(c, univ)
+	if err != nil {
+		return err
 	}
+	tt, err := findTimetable(c, group)
+	if err != nil {
+		return err
+	}
+	firstDate, lastDate := domain.GetAcademicYearDates(time.Now())
+	cached, _ := cache.GetTimetableByAdeResources(tt.AdeResources)
+	return c.JSON(domain.TimetableResponse{
+		AdeResources: tt.AdeResources,
+		AdeProjectId: univ.AdeProjectId,
+		Year:         tt.Year,
+		Label:        tt.Label,
+		AdeUrl:       domain.BuildAdeUrl(univ.AdeUrl, tt.AdeResources, univ.AdeProjectId, firstDate, lastDate),
+		LastUpdate:   cached.LastUpdate,
+	})
 }
 
-func createRoomResponse(university *domain.UniversityConfig, room *domain.RoomConfig) domain.TimetableResponse {
-	timetableCache, ok := cache.GetTimetableByIds(room.AdeResources)
-	lastUpdate := time.Time{}
-	if ok {
-		lastUpdate = timetableCache.LastUpdate
+func getTimetableEvents(c *fiber.Ctx) error {
+	univ, err := findUniversity(c)
+	if err != nil {
+		return err
 	}
-
-	nameUniv := ""
-	if university != nil {
-		nameUniv = university.NameUniv
+	group, err := findGroup(c, univ)
+	if err != nil {
+		return err
 	}
+	tt, err := findTimetable(c, group)
+	if err != nil {
+		return err
+	}
+	return serveEvents(c, univ, tt.AdeResources)
+}
 
-	return domain.TimetableResponse{
-		NameUniv:     nameUniv,
-		DescTT:       room.DescTT,
-		NumYearTT:    0,
+func listRooms(c *fiber.Ctx) error {
+	univ, err := findUniversity(c)
+	if err != nil {
+		return err
+	}
+	firstDate, lastDate := domain.GetAcademicYearDates(time.Now())
+	var resp []domain.RoomResponse
+	for _, room := range univ.Rooms {
+		cached, _ := cache.GetTimetableByAdeResources(room.AdeResources)
+		resp = append(resp, domain.RoomResponse{
+			AdeResources: room.AdeResources,
+			AdeProjectId: univ.AdeProjectId,
+			Label:        room.Label,
+			AdeUrl:       domain.BuildAdeUrl(univ.AdeUrl, room.AdeResources, univ.AdeProjectId, firstDate, lastDate),
+			LastUpdate:   cached.LastUpdate,
+		})
+	}
+	return c.JSON(resp)
+}
+
+func getRoomMetadata(c *fiber.Ctx) error {
+	univ, err := findUniversity(c)
+	if err != nil {
+		return err
+	}
+	room, err := findRoom(c, univ)
+	if err != nil {
+		return err
+	}
+	firstDate, lastDate := domain.GetAcademicYearDates(time.Now())
+	cached, _ := cache.GetTimetableByAdeResources(room.AdeResources)
+	return c.JSON(domain.RoomResponse{
 		AdeResources: room.AdeResources,
-		AdeProjectId: room.AdeProjectId,
-		LastUpdate:   lastUpdate,
+		AdeProjectId: univ.AdeProjectId,
+		Label:        room.Label,
+		AdeUrl:       domain.BuildAdeUrl(univ.AdeUrl, room.AdeResources, univ.AdeProjectId, firstDate, lastDate),
+		LastUpdate:   cached.LastUpdate,
+	})
+}
+
+func getRoomEvents(c *fiber.Ctx) error {
+	univ, err := findUniversity(c)
+	if err != nil {
+		return err
 	}
+	room, err := findRoom(c, univ)
+	if err != nil {
+		return err
+	}
+	return serveEvents(c, univ, room.AdeResources)
+}
+
+// --- Content Negotiation ---
+
+// serveEvents returns cached events in the format requested by the Accept header.
+// Defaults to JSON. Use Accept: text/calendar for iCal format.
+// If cache is stale or missing, fetches on-demand.
+func serveEvents(c *fiber.Ctx, univ *domain.UniversityConfig, adeResources int) error {
+	cache.RecordHit(adeResources)
+
+	timetableCache, ok := cache.GetTimetableByAdeResources(adeResources)
+	isStale := !ok || time.Since(timetableCache.LastUpdate).Minutes() > float64(domain.AppConfig.RefreshMinutes)
+
+	if isStale {
+		calendar, err := cache.FetchTimetable(univ.AdeUrl, adeResources, univ.AdeProjectId)
+		if err == nil {
+			timetableCache = cache.SetTimetableByAdeResources(adeResources, calendar.Serialize(), cache.CalendarToJson(calendar))
+		} else if !ok {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(domain.ErrorResponse{
+				Error: "could not fetch timetable and no cache available, try again later",
+			})
+		}
+		// If fetch fails but stale cache exists, serve stale cache
+	}
+
+	accept := c.Accepts("application/json", "text/calendar")
+	switch accept {
+	case "text/calendar":
+		c.Set("Content-Type", "text/calendar")
+		return c.SendString(timetableCache.Ical)
+	default:
+		return c.JSON(timetableCache.Json)
+	}
+}
+
+// --- Lookup Helpers ---
+
+func findUniversity(c *fiber.Ctx) (*domain.UniversityConfig, error) {
+	univId, err := strconv.Atoi(c.Params("univId"))
+	if err != nil {
+		return nil, c.Status(fiber.StatusBadRequest).JSON(domain.ErrorResponse{Error: "invalid univId parameter"})
+	}
+	idx := slices.IndexFunc(domain.AppConfig.Universities, func(u domain.UniversityConfig) bool {
+		return u.ID == univId
+	})
+	if idx < 0 {
+		return nil, c.Status(fiber.StatusNotFound).JSON(domain.ErrorResponse{Error: "university not found"})
+	}
+	return &domain.AppConfig.Universities[idx], nil
+}
+
+func findGroup(c *fiber.Ctx, univ *domain.UniversityConfig) (*domain.GroupConfig, error) {
+	groupId, err := strconv.Atoi(c.Params("groupId"))
+	if err != nil {
+		return nil, c.Status(fiber.StatusBadRequest).JSON(domain.ErrorResponse{Error: "invalid groupId parameter"})
+	}
+	idx := slices.IndexFunc(univ.Groups, func(g domain.GroupConfig) bool {
+		return g.ID == groupId
+	})
+	if idx < 0 {
+		return nil, c.Status(fiber.StatusNotFound).JSON(domain.ErrorResponse{Error: "group not found"})
+	}
+	return &univ.Groups[idx], nil
+}
+
+func findTimetable(c *fiber.Ctx, group *domain.GroupConfig) (*domain.TimetableConfig, error) {
+	adeResources, err := strconv.Atoi(c.Params("adeResources"))
+	if err != nil {
+		return nil, c.Status(fiber.StatusBadRequest).JSON(domain.ErrorResponse{Error: "invalid adeResources parameter"})
+	}
+	idx := slices.IndexFunc(group.Timetables, func(tt domain.TimetableConfig) bool {
+		return tt.AdeResources == adeResources
+	})
+	if idx < 0 {
+		return nil, c.Status(fiber.StatusNotFound).JSON(domain.ErrorResponse{Error: "timetable not found"})
+	}
+	return &group.Timetables[idx], nil
+}
+
+func findRoom(c *fiber.Ctx, univ *domain.UniversityConfig) (*domain.RoomConfig, error) {
+	adeResources, err := strconv.Atoi(c.Params("adeResources"))
+	if err != nil {
+		return nil, c.Status(fiber.StatusBadRequest).JSON(domain.ErrorResponse{Error: "invalid adeResources parameter"})
+	}
+	idx := slices.IndexFunc(univ.Rooms, func(r domain.RoomConfig) bool {
+		return r.AdeResources == adeResources
+	})
+	if idx < 0 {
+		return nil, c.Status(fiber.StatusNotFound).JSON(domain.ErrorResponse{Error: "room not found"})
+	}
+	return &univ.Rooms[idx], nil
 }

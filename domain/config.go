@@ -3,34 +3,40 @@ package domain
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 )
 
 type TimetableConfig struct {
-	NumYearTT    int    `json:"numYearTT"`
-	DescTT       string `json:"descTT"`
 	AdeResources int    `json:"adeResources"`
-	AdeProjectId int    `json:"adeProjectId"`
+	Year         int    `json:"year"`
+	Label        string `json:"label"`
 }
 
 type RoomConfig struct {
-	DescTT       string `json:"descTT"`
 	AdeResources int    `json:"adeResources"`
-	AdeProjectId int    `json:"adeProjectId"`
+	Label        string `json:"label"`
+}
+
+type GroupConfig struct {
+	ID         int               `json:"id"`
+	Name       string            `json:"name"`
+	Timetables []TimetableConfig `json:"timetables"`
 }
 
 type UniversityConfig struct {
-	Id         int               `json:"id"`
-	NameUniv   string            `json:"name"`
-	AdeUniv    string            `json:"adeUrl"`
-	Timetables []TimetableConfig `json:"timetables"`
+	ID           int           `json:"id"`
+	Name         string        `json:"name"`
+	AdeUrl       string        `json:"adeUrl"`
+	AdeProjectId int           `json:"adeProjectId"`
+	Rooms        []RoomConfig  `json:"rooms"`
+	Groups       []GroupConfig `json:"groups"`
 }
 
 type Config struct {
 	RefreshMinutes int                `json:"refreshMinutes"`
 	Universities   []UniversityConfig `json:"univs"`
-	Rooms          []RoomConfig       `json:"rooms"`
 }
 
 var AppConfig Config
@@ -53,8 +59,44 @@ func LoadConfig() error {
 		return err
 	}
 
-	if AppConfig.RefreshMinutes < 1 {
+	return validateConfig(&AppConfig)
+}
+
+func validateConfig(config *Config) error {
+	if config.RefreshMinutes < 1 {
 		return errors.New("refreshMinutes must be greater than 0")
+	}
+
+	univIDs := make(map[int]bool)
+	groupIDs := make(map[int]bool)
+	adeResourcesSet := make(map[int]bool)
+
+	for _, univ := range config.Universities {
+		if univIDs[univ.ID] {
+			return fmt.Errorf("duplicate university id: %d", univ.ID)
+		}
+		univIDs[univ.ID] = true
+
+		for _, room := range univ.Rooms {
+			if adeResourcesSet[room.AdeResources] {
+				return fmt.Errorf("duplicate adeResources: %d", room.AdeResources)
+			}
+			adeResourcesSet[room.AdeResources] = true
+		}
+
+		for _, group := range univ.Groups {
+			if groupIDs[group.ID] {
+				return fmt.Errorf("duplicate group id: %d in university %d", group.ID, univ.ID)
+			}
+			groupIDs[group.ID] = true
+
+			for _, tt := range group.Timetables {
+				if adeResourcesSet[tt.AdeResources] {
+					return fmt.Errorf("duplicate adeResources: %d", tt.AdeResources)
+				}
+				adeResourcesSet[tt.AdeResources] = true
+			}
+		}
 	}
 
 	return nil

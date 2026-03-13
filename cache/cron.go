@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -32,26 +31,29 @@ func StartScheduler() error {
 
 func refreshPopularTimetables() {
 	cacheMu.RLock()
-	keys := make([]string, 0, len(cache))
-	for k := range cache {
+	keys := make([]string, 0, len(cacheMap))
+	for k := range cacheMap {
 		keys = append(keys, k)
 	}
 	cacheMu.RUnlock()
 
 	for _, adeResourcesStr := range keys {
-		adeResources, _ := strconv.Atoi(adeResourcesStr)
-		if IsPopular(adeResources) {
-			var targetUniv *domain.UniversityConfig
-			var targetProjectId int
-			found := false
+		var adeResources int
+		fmt.Sscanf(adeResourcesStr, "%d", &adeResources)
+		if !IsPopular(adeResources) {
+			continue
+		}
 
-			for i := range domain.AppConfig.Universities {
-				university := &domain.AppConfig.Universities[i]
-				for j := range university.Timetables {
-					tt := &university.Timetables[j]
+		// Find the resource in universities (groups or rooms)
+		found := false
+		for i := range domain.AppConfig.Universities {
+			univ := &domain.AppConfig.Universities[i]
+
+			// Search in groups
+			for _, group := range univ.Groups {
+				for _, tt := range group.Timetables {
 					if tt.AdeResources == adeResources {
-						targetUniv = university
-						targetProjectId = tt.AdeProjectId
+						fetchAndCache(univ.AdeUrl, adeResources, univ.AdeProjectId)
 						found = true
 						break
 					}
@@ -60,45 +62,41 @@ func refreshPopularTimetables() {
 					break
 				}
 			}
-
-			if !found {
-				for j := range domain.AppConfig.Rooms {
-					room := &domain.AppConfig.Rooms[j]
-					if room.AdeResources == adeResources {
-						if len(domain.AppConfig.Universities) > 0 {
-							targetUniv = &domain.AppConfig.Universities[0]
-						}
-						targetProjectId = room.AdeProjectId
-						found = true
-						break
-					}
-				}
+			if found {
+				break
 			}
 
-			if found && targetUniv != nil {
-				calendar, err := FetchTimetable(*targetUniv, adeResources, targetProjectId)
-				if err == nil {
-					SetTimetableByIds(adeResources, calendar.Serialize(), CalendarToJson(calendar))
+			// Search in rooms
+			for _, room := range univ.Rooms {
+				if room.AdeResources == adeResources {
+					fetchAndCache(univ.AdeUrl, adeResources, univ.AdeProjectId)
+					found = true
+					break
 				}
+			}
+			if found {
+				break
 			}
 		}
 	}
 }
 
-func FetchTimetable(university domain.UniversityConfig, adeResources int, adeProjectId int) (*ics.Calendar, error) {
-	firstDate := time.Now().AddDate(0, -4, 0).Format("2006-01-02")
-	lastDate := time.Now().AddDate(0, 4, 0).Format("2006-01-02")
-	req, err := http.NewRequest(http.MethodGet, university.AdeUniv, nil)
+func fetchAndCache(adeBaseUrl string, adeResources int, adeProjectId int) {
+	calendar, err := FetchTimetable(adeBaseUrl, adeResources, adeProjectId)
+	if err != nil {
+		return
+	}
+	SetTimetableByAdeResources(adeResources, calendar.Serialize(), CalendarToJson(calendar))
+}
+
+func FetchTimetable(adeBaseUrl string, adeResources int, adeProjectId int) (*ics.Calendar, error) {
+	firstDate, lastDate := domain.GetAcademicYearDates(time.Now())
+	fullUrl := domain.BuildAdeUrl(adeBaseUrl, adeResources, adeProjectId, firstDate, lastDate)
+
+	req, err := http.NewRequest(http.MethodGet, fullUrl, nil)
 	if err != nil {
 		return nil, err
 	}
-	q := req.URL.Query()
-	q.Add("resources", strconv.Itoa(adeResources))
-	q.Add("projectId", strconv.Itoa(adeProjectId))
-	q.Add("calType", "ical")
-	q.Add("firstDate", firstDate)
-	q.Add("lastDate", lastDate)
-	req.URL.RawQuery = q.Encode()
 
 	body, err := MakeRequest(fmt.Sprintf("%d", adeResources), req)
 	if err != nil {
